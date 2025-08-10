@@ -1,189 +1,543 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Switch } from "@/components/ui/switch"
+import { Separator } from "@/components/ui/separator"
+import { toast } from "sonner"
+
+interface Document {
+  id: number
+  document_name: string
+  original_filename: string
+  document_type: string
+  is_enabled: boolean
+  tenant_id: number
+  file_size: number
+  content_length: number
+  chunk_count: number
+  vector_ids: string[]
+  embedding_model_id: number
+  embedding_provider_name: string
+  created_at: string
+  updated_at: string
+}
+
+interface KnowledgeBaseStats {
+  total_documents: number
+  total_chunks: number
+  providers: {
+    provider_name: string
+    document_count: number
+    total_chunks: number
+    enabled_documents: number
+  }[]
+  enabled_documents: number
+}
+
+interface DocumentsResponse {
+  documents: Document[]
+  total: number
+  page: number
+  page_size: number
+}
 
 export default function KnowledgePage() {
-  const [selectedWhatsApp, setSelectedWhatsApp] = useState(0)
-  const [activeTab, setActiveTab] = useState<'text' | 'documents'>('documents')
-  const [showModal, setShowModal] = useState(false)
-  const [knowledgeText, setKnowledgeText] = useState("This is the knowledge base for Erum Saba Medical Center. We provide comprehensive medical services including general check-ups, specialist consultations, and emergency care.")
-  const [documents, setDocuments] = useState([
-    { id: 1, title: "Medical Guidelines", fileName: "guidelines.pdf" },
-    { id: 2, title: "Patient Instructions", fileName: "instructions.pdf" }
-  ])
-  const [newDoc, setNewDoc] = useState({ title: "", file: null as File | null })
+  const [documents, setDocuments] = useState<Document[]>([])
+  const [stats, setStats] = useState<KnowledgeBaseStats | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [uploading, setUploading] = useState(false)
+  const [showUploadModal, setShowUploadModal] = useState(false)
+  const [showEditModal, setShowEditModal] = useState(false)
+  const [selectedDocument, setSelectedDocument] = useState<Document | null>(null)
+  const [currentPage, setCurrentPage] = useState(1)
+  const [pageSize] = useState(20)
+  const [selectedProvider, setSelectedProvider] = useState<string>("all")
+  const [showEnabledOnly, setShowEnabledOnly] = useState(true)
 
-  const whatsAppNumbers = [
-    "Erum Saba Medical Center +971506659064",
-    "Dubai Clinic +971507778899"
-  ]
+  // Upload form state
+  const [uploadForm, setUploadForm] = useState({
+    file: null as File | null,
+    document_name: "",
+    tenant_id: 1, // Default tenant ID - you might want to get this from context
+    embedding_config_id: 1 // Default embedding config ID
+  })
 
-  const handleAddDocument = () => {
-    if (newDoc.title && newDoc.file) {
-      setDocuments([...documents, {
-        id: Date.now(),
-        title: newDoc.title,
-        fileName: newDoc.file.name
-      }])
-      setNewDoc({ title: "", file: null })
-      setShowModal(false)
+  // Edit form state
+  const [editForm, setEditForm] = useState({
+    document_name: "",
+    is_enabled: true
+  })
+
+  // Mock tenant ID - replace with actual tenant ID from your auth context
+  const tenantId = 1
+
+  // Fetch documents
+  const fetchDocuments = async () => {
+    try {
+      setLoading(true)
+      const params = new URLSearchParams({
+        tenant_id: tenantId.toString(),
+        page: currentPage.toString(),
+        page_size: pageSize.toString(),
+        enabled_only: showEnabledOnly.toString()
+      })
+      
+      if (selectedProvider && selectedProvider !== "all") {
+        params.append('provider_name', selectedProvider)
+      }
+
+      const response = await fetch(`/api/knowledge-base/?${params}`)
+      if (!response.ok) throw new Error('Failed to fetch documents')
+      
+      const data: DocumentsResponse = await response.json()
+      setDocuments(data.documents)
+    } catch (error) {
+      console.error('Error fetching documents:', error)
+      toast.error('Failed to fetch documents')
+    } finally {
+      setLoading(false)
     }
   }
 
-  const handleDeleteDocument = (id: number) => {
-    setDocuments(documents.filter(doc => doc.id !== id))
+  // Fetch stats
+  const fetchStats = async () => {
+    try {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/knowledge-base/stats?tenant_id=${tenantId}`)
+      if (!response.ok) throw new Error('Failed to fetch stats')
+      
+      const data: KnowledgeBaseStats = await response.json()
+      setStats(data)
+    } catch (error) {
+      console.error('Error fetching stats:', error)
+      toast.error('Failed to fetch stats')
+    }
   }
+
+  // Upload document
+  const handleUpload = async () => {
+    if (!uploadForm.file) {
+      toast.error('Please select a file')
+      return
+    }
+
+    try {
+      setUploading(true)
+      const formData = new FormData()
+      formData.append('file', uploadForm.file)
+      formData.append('tenant_id', uploadForm.tenant_id.toString())
+      formData.append('embedding_config_id', uploadForm.embedding_config_id.toString())
+      
+      if (uploadForm.document_name) {
+        formData.append('document_name', uploadForm.document_name)
+      }
+
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/knowledge-base/upload`, {
+        method: 'POST',
+        body: formData
+      })
+
+      if (!response.ok) throw new Error('Failed to upload document')
+      
+      const result = await response.json()
+      toast.success(`Document uploaded successfully! ${result.chunk_count} chunks created.`)
+      
+      setShowUploadModal(false)
+      setUploadForm({ file: null, document_name: "", tenant_id: 1, embedding_config_id: 1 })
+      fetchDocuments()
+      fetchStats()
+    } catch (error) {
+      console.error('Error uploading document:', error)
+      toast.error('Failed to upload document')
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  // Update document
+  const handleUpdateDocument = async () => {
+    if (!selectedDocument) return
+
+    try {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/knowledge-base/${selectedDocument.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(editForm)
+      })
+
+      if (!response.ok) throw new Error('Failed to update document')
+      
+      toast.success('Document updated successfully!')
+      setShowEditModal(false)
+      setSelectedDocument(null)
+      fetchDocuments()
+      fetchStats()
+    } catch (error) {
+      console.error('Error updating document:', error)
+      toast.error('Failed to update document')
+    }
+  }
+
+  // Delete document
+  const handleDeleteDocument = async (documentId: number) => {
+    if (!confirm('Are you sure you want to delete this document? This action cannot be undone.')) {
+      return
+    }
+
+    try {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/knowledge-base/${documentId}`, {
+        method: 'DELETE'
+      })
+
+      if (!response.ok) throw new Error('Failed to delete document')
+      
+      toast.success('Document deleted successfully!')
+      fetchDocuments()
+      fetchStats()
+    } catch (error) {
+      console.error('Error deleting document:', error)
+      toast.error('Failed to delete document')
+    }
+  }
+
+  // Reset provider knowledge base
+  const handleResetProvider = async (providerName: string) => {
+    if (!confirm(`Are you sure you want to reset all documents for provider "${providerName}"? This action cannot be undone.`)) {
+      return
+    }
+
+    try {
+        const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/knowledge-base/tenant/${tenantId}/provider/${providerName}/reset?confirm=true`, {
+        method: 'DELETE'
+      })
+
+      if (!response.ok) throw new Error('Failed to reset provider')
+      
+      toast.success(`Provider "${providerName}" reset successfully!`)
+      fetchDocuments()
+      fetchStats()
+    } catch (error) {
+      console.error('Error resetting provider:', error)
+      toast.error('Failed to reset provider')
+    }
+  }
+
+  // Format file size
+  const formatFileSize = (bytes: number) => {
+    if (bytes === 0) return '0 Bytes'
+    const k = 1024
+    const sizes = ['Bytes', 'KB', 'MB', 'GB']
+    const i = Math.floor(Math.log(bytes) / Math.log(k))
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
+  }
+
+  // Format date
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    })
+  }
+
+  useEffect(() => {
+    fetchDocuments()
+    fetchStats()
+  }, [currentPage, selectedProvider, showEnabledOnly])
 
   return (
     <div className="space-y-6">
       {/* Header */}
       <div>
         <h2 className="font-bold text-2xl mb-2">Knowledge Base</h2>
-        <p className="text-gray-600">Configure knowledge base content for your WhatsApp numbers. This content will be used for AI responses.</p>
+        <p className="text-gray-600">Manage your knowledge base documents and monitor usage statistics.</p>
       </div>
 
-      {/* WhatsApp Number Selection */}
-      {/* <div className="flex items-center gap-4 bg-white p-4 rounded-lg border">
-        {whatsAppNumbers.map((number, index) => (
-          <button
-            key={index}
-            onClick={() => setSelectedWhatsApp(index)}
-            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-              selectedWhatsApp === index 
-                ? 'bg-gray-100 text-gray-900' 
-                : 'bg-white text-gray-600 hover:bg-gray-50'
-            }`}
-          >
-            {number}
-          </button>
-        ))}
-       
-      </div> */}
-
-      {/* Content Tabs */}
-      <div className="flex border-b">
-        {/* <button
-          onClick={() => setActiveTab('text')}
-          className={`flex items-center gap-2 px-6 py-3 font-medium transition-colors ${
-            activeTab === 'text'
-              ? 'border-b-2 border-green-500 text-green-600'
-              : 'text-gray-600 hover:text-gray-900'
-          }`}
-        >
-          <span className="text-lg">📖</span>
-          Knowledge Base Text
-        </button> */}
-        <button
-          onClick={() => setActiveTab('documents')}
-          className={`flex items-center gap-2 px-6 py-3 font-medium transition-colors ${
-            activeTab === 'documents'
-              ? 'border-b-2 border-green-500 text-green-600'
-              : 'text-gray-600 hover:text-gray-900'
-          }`}
-        >
-          <span className="text-lg">📄</span>
-          Knowledge Base Documents
-        </button>
-      </div>
-
-      {/* Content Area */}
-      <div className="bg-white rounded-lg border p-6">
-        {activeTab === 'text' ? (
-          <div className="space-y-4">
-            <textarea
-              value={knowledgeText}
-              onChange={(e) => setKnowledgeText(e.target.value)}
-              className="w-full h-64 p-4 border rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-green-500"
-              placeholder="Enter your knowledge base text..."
-            />
-            <button className="bg-green-500 hover:bg-green-600 text-white px-6 py-2 rounded-md font-medium transition-colors">
-              Save Text
-            </button>
-          </div>
-        ) : (
-          <div className="space-y-4">
-            <div className="flex mb-8 justify-between items-center">
-              <h3 className="font-semibold text-lg">Documents</h3>
-              <button
-                onClick={() => setShowModal(true)}
-                className="bg-green-800 text-white px-4 font-bold py-1 rounded-full transition-colors"
-              >
-                + Add Document
-              </button>
-            </div>
-            
-            <table className="w-full">
-              <thead>
-                <tr className="border-b text-left">
-                  <th className="pb-3 font-semibold">Document Title</th>
-                  <th className="pb-3 font-semibold">File Name</th>
-                  <th className="pb-3 font-semibold">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {documents.map((doc) => (
-                  <tr key={doc.id} className="border-b">
-                    <td className="py-3">{doc.title}</td>
-                    <td className="py-3 text-gray-600">{doc.fileName}</td>
-                    <td className="py-3">
-                      <button
-                        onClick={() => handleDeleteDocument(doc.id)}
-                        className="text-red-500 hover:text-red-700 font-bold"
-                      >
-                        ✕
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-
-      {/* Add Document Modal */}
-      {showModal && (
-        <div className="fixed inset-0 mt-[-100px] bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-md">
-            <h3 className="font-bold text-lg mb-4">Add Document</h3>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium mb-2">Document Title</label>
-                <input
-                  type="text"
-                  value={newDoc.title}
-                  onChange={(e) => setNewDoc({ ...newDoc, title: e.target.value })}
-                  className="w-full p-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
-                  placeholder="Enter document title"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-2">Upload File</label>
-                <input
-                  type="file"
-                  onChange={(e) => setNewDoc({ ...newDoc, file: e.target.files?.[0] || null })}
-                  className="w-full p-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
-                  accept=".pdf,.doc,.docx"
-                />
-              </div>
-            </div>
-            <div className="flex gap-3 mt-6">
-              <button
-                onClick={() => setShowModal(false)}
-                className="flex-1 px-4 py-2 border rounded-md hover:bg-gray-50 transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleAddDocument}
-                className="flex-1 px-2  bg-green-800 text-white rounded-md hover:bg-green-900 transition-colors"
-              >
-                Add Document
-              </button>
-            </div>
-          </div>
+      {/* Stats Cards */}
+      {stats && (
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-gray-600">Total Documents</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{stats.total_documents}</div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-gray-600">Total Chunks</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{stats.total_chunks}</div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-gray-600">Enabled Documents</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{stats.enabled_documents}</div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-gray-600">Providers</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{stats.providers.length}</div>
+            </CardContent>
+          </Card>
         </div>
       )}
+
+      {/* Provider Stats */}
+      {stats && stats.providers.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Provider Statistics</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {stats.providers.map((provider, index) => (
+                <div key={index} className="flex items-center justify-between p-4 border rounded-lg">
+                  <div>
+                    <h4 className="font-semibold">{provider.provider_name}</h4>
+                    <p className="text-sm text-gray-600">
+                      {provider.document_count} documents, {provider.total_chunks} chunks
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Badge variant={provider.enabled_documents > 0 ? "default" : "secondary"}>
+                      {provider.enabled_documents} enabled
+                    </Badge>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleResetProvider(provider.provider_name)}
+                      className="text-red-600 hover:text-red-700"
+                    >
+                      Reset
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Filters and Actions */}
+      <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+        <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
+          <Select value={selectedProvider} onValueChange={setSelectedProvider}>
+            <SelectTrigger className="w-[200px]">
+              <SelectValue placeholder="All Providers" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Providers</SelectItem>
+              {stats?.providers.map((provider) => (
+                <SelectItem key={provider.provider_name} value={provider.provider_name}>
+                  {provider.provider_name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          
+          <div className="flex items-center space-x-2">
+            <Switch
+              id="enabled-only"
+              checked={showEnabledOnly}
+              onCheckedChange={setShowEnabledOnly}
+            />
+            <Label htmlFor="enabled-only">Show enabled only</Label>
+          </div>
+        </div>
+
+        <Dialog open={showUploadModal} onOpenChange={setShowUploadModal}>
+          <DialogTrigger asChild>
+            <Button className="bg-green-800 hover:bg-green-900">
+              + Upload Document
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="sm:max-w-[425px]">
+            <DialogHeader>
+              <DialogTitle>Upload Document</DialogTitle>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+              <div className="grid gap-2">
+                <Label htmlFor="document-name">Document Name (Optional)</Label>
+                <Input
+                  id="document-name"
+                  value={uploadForm.document_name}
+                  onChange={(e) => setUploadForm({ ...uploadForm, document_name: e.target.value })}
+                  placeholder="Enter document name"
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="file">File</Label>
+                <Input
+                  id="file"
+                  type="file"
+                  onChange={(e) => setUploadForm({ ...uploadForm, file: e.target.files?.[0] || null })}
+                  accept=".pdf,.doc,.docx,.txt"
+                />
+              </div>
+              {/* <div className="grid gap-2">
+                <Label htmlFor="tenant-id">Tenant ID</Label>
+                <Input
+                  id="tenant-id"
+                  type="number"
+                  value={uploadForm.tenant_id}
+                  onChange={(e) => setUploadForm({ ...uploadForm, tenant_id: parseInt(e.target.value) })}
+                />
+              </div> */}
+              <div className="grid gap-2">
+                <Label htmlFor="embedding-config">Embedding Config ID</Label>
+                <Input
+                  id="embedding-config"
+                  type="number"
+                  value={uploadForm.embedding_config_id}
+                  onChange={(e) => setUploadForm({ ...uploadForm, embedding_config_id: parseInt(e.target.value) })}
+                />
+              </div>
+            </div>
+            <div className="flex gap-3">
+              <Button variant="outline" onClick={() => setShowUploadModal(false)}>
+                Cancel
+              </Button>
+              <Button 
+                onClick={handleUpload} 
+                disabled={uploading || !uploadForm.file}
+                className="bg-green-800 hover:bg-green-900"
+              >
+                {uploading ? 'Uploading...' : 'Upload'}
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+      </div>
+
+      {/* Documents Table */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Documents</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {loading ? (
+            <div className="text-center py-8">Loading documents...</div>
+          ) : documents.length === 0 ? (
+            <div className="text-center py-8 text-gray-500">
+              No documents found. Upload your first document to get started.
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {documents.map((doc) => (
+                <div key={doc.id} className="border rounded-lg p-4">
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-2">
+                        <h3 className="font-semibold">{doc.document_name || doc.original_filename}</h3>
+                        <Badge variant={doc.is_enabled ? "default" : "secondary"}>
+                          {doc.is_enabled ? "Enabled" : "Disabled"}
+                        </Badge>
+                        <Badge variant="outline">{doc.embedding_provider_name}</Badge>
+                      </div>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm text-gray-600">
+                        <div>
+                          <span className="font-medium">File:</span> {doc.original_filename}
+                        </div>
+                        <div>
+                          <span className="font-medium">Size:</span> {formatFileSize(doc.file_size)}
+                        </div>
+                        <div>
+                          <span className="font-medium">Chunks:</span> {doc.chunk_count}
+                        </div>
+                        <div>
+                          <span className="font-medium">Created:</span> {formatDate(doc.created_at)}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 ml-4">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setSelectedDocument(doc)
+                          setEditForm({
+                            document_name: doc.document_name,
+                            is_enabled: doc.is_enabled
+                          })
+                          setShowEditModal(true)
+                        }}
+                      >
+                        Edit
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleDeleteDocument(doc.id)}
+                        className="text-red-600 hover:text-red-700"
+                      >
+                        Delete
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Edit Document Modal */}
+      <Dialog open={showEditModal} onOpenChange={setShowEditModal}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Edit Document</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid gap-2">
+              <Label htmlFor="edit-document-name">Document Name</Label>
+              <Input
+                id="edit-document-name"
+                value={editForm.document_name}
+                onChange={(e) => setEditForm({ ...editForm, document_name: e.target.value })}
+                placeholder="Enter document name"
+              />
+            </div>
+            <div className="flex items-center space-x-2">
+              <Switch
+                id="edit-enabled"
+                checked={editForm.is_enabled}
+                onCheckedChange={(checked) => setEditForm({ ...editForm, is_enabled: checked })}
+              />
+              <Label htmlFor="edit-enabled">Enable document</Label>
+            </div>
+          </div>
+          <div className="flex gap-3">
+            <Button variant="outline" onClick={() => setShowEditModal(false)}>
+              Cancel
+            </Button>
+            <Button 
+              onClick={handleUpdateDocument}
+              className="bg-green-800 hover:bg-green-900"
+            >
+              Update
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

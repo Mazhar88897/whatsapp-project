@@ -18,12 +18,17 @@ export default function Topbar() {
   const [logoutOpen, setLogoutOpen] = React.useState(false);
   const router = useRouter();
 
+  const getUserName = () => {
+    const user = JSON.parse(sessionStorage.getItem('user') || '{}')
+    return user?.name || 'Agent ID 21'
+  }
+
   return (
     <div className="flex items-center justify-end px-6 py-4 bg-white dark:bg-background relative">
       <div className="flex items-center cursor-pointer select-none" onClick={() => setOpen(!open)}>
         {open ? <ChevronUp className="w-6 h-6 text-gray-500  mx-2" /> : <ChevronDown className="w-6 h-6 text-gray-500  mx-2" />}
-        <div className="h-8 w-8 rounded-full bg-green-800 flex items-center justify-center text-white mr-2">J</div>
-          <span className="hidden md:inline text-sm text-gray-600 dark:text-white">John Drew</span>
+        <div className="h-8 w-8 rounded-full bg-green-800 flex items-center justify-center text-white mr-2">{getUserName()?.charAt(0)}</div>
+          <span className="hidden md:inline text-sm text-gray-600 dark:text-white">{getUserName()}</span>
       </div>
       {open && (
         <div className="absolute right-6 top-16 w-48 bg-white dark:bg-gray-800 shadow-lg rounded-md py-2 z-50">

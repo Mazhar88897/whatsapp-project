@@ -7,9 +7,9 @@ import { Eye, EyeOff, MessageCircle } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 
-export default function TenantLoginPage() {
+export default function OwnerSignupPage() {
   const [showPassword, setShowPassword] = useState(false)
-  const [tenantName, setTenantName] = useState('')
+  const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const router = useRouter();
@@ -17,18 +17,28 @@ export default function TenantLoginPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     console.log(process.env.NEXT_PUBLIC_API_BASE_URL)
+    
+    // Get tenant secret code from session storage
+    const tenantSecretCode = sessionStorage.getItem('tenantSecret')
+    
+    if (!tenantSecretCode) {
+      console.error('Tenant secret code not found in session')
+      return
+    }
+    
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/tenant/`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/user/signup`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          name: tenantName,
           email: email,
-          max_team_member_allowed: 5,
-          max_conversations_allowed: 30,
-          max_outgoing_messages_per_day: 800
+          password: password,
+          name: name,
+          tenant_secret_code: tenantSecretCode,
+          role_id: 1, // Hardcoded role_id
+          department_id: 1 // Hardcoded department_id
         })
       })
       
@@ -36,14 +46,16 @@ export default function TenantLoginPage() {
         throw new Error(`HTTP error! status: ${response.status}`)
       }
       
-      const data = await response.json()
-      console.log('Tenant login successful!')
-      sessionStorage.setItem('tenantID', data.id)
-      sessionStorage.setItem('tenantName', data.name)
-      sessionStorage.setItem('tenantSecret', data.tenant_secret_code)
-      sessionStorage.setItem('tenantData', data)
+       const data = await response.json()
+       console.log('User signup successful!')
+       sessionStorage.setItem('ownerData', JSON.stringify(data))
+       sessionStorage.setItem('roleID', data.role_id)
+       sessionStorage.setItem('departmentID', data.department_id)
+      
+     
 
-      router.push('/auth/sign-in')
+      // Redirect to sign-up page
+      router.push('/auth/sign-up')
     } catch (error: any) {
       console.log(error)
     }
@@ -58,22 +70,22 @@ export default function TenantLoginPage() {
             <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-green-500 rounded-lg flex items-center justify-center mb-4">
               <MessageCircle className="w-7 h-6 text-white" strokeWidth={2.5}/>
             </div>
-            <h1 className="text-2xl font-bold text-gray-900">Tenant Login</h1>
+            <h1 className="text-2xl font-bold text-gray-900">Owner Signup</h1>
           </div>
 
           {/* Form */}
           <form onSubmit={handleSubmit} className="space-y-4">
-            {/* Tenant ID Field */}
+            {/* Name Field */}
             <div>
-                <label htmlFor="tenantName" className="block text-sm font-medium text-gray-700 mb-2">
-                Tenant Name
+              <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-2">
+                Full Name
               </label>
               <Input
-                id="tenantName"
+                id="name"
                 type="text"
-                placeholder="Enter your tenant name"
-                value={tenantName}
-                onChange={(e) => setTenantName(e.target.value)}
+                placeholder="Enter your full name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
                 className="w-full"
                 required
               />
@@ -117,20 +129,21 @@ export default function TenantLoginPage() {
                 </button>
               </div>
             </div>
-            {/* Login Button */}
+
+            {/* Signup Button */}
             <Button
               type="submit"
               className="w-full bg-gradient-to-r from-blue-500 to-green-500 hover:from-blue-600 hover:to-green-600 text-white font-medium py-3 rounded-md transition-all duration-200 transform hover:scale-[1.02]"
             >
-              Tenant Log In
+              Sign Up
             </Button>
-            {/* Forgot Password Link */}
+            {/* Login Link */}
             <div className="text-center">
               <Link
-                href="/auth/forgot-password"
+                href="/auth/sign-in"
                 className="text-blue-600 hover:text-blue-700 text-sm font-medium transition-colors"
               >
-                Forgot your password?
+                Already have an account? Sign in
               </Link>
             </div>
           </form>

@@ -42,12 +42,20 @@ import { ThemeProvider } from "@/components/theme-provider"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { Card, CardContent } from "@/components/ui/card"
 import { NotificationModal } from "@/components/shared/notification-modal"
+import { useRouter } from "next/navigation"
 
 interface SidebarProps {
   className?: string
 }
 
 export function Sidebar({ className }: SidebarProps) {
+  const router = useRouter()
+  useEffect(() => {
+    const userLoginData = sessionStorage.getItem('userLoginData')
+    if (!userLoginData) {
+      router.push('/auth/sign-in')
+    }
+  }, [])
   const [isOpen, setIsOpen] = useState(true)
   const [isMobile, setIsMobile] = useState(false)
   const [notificationOpen, setNotificationOpen] = useState(false)
@@ -143,13 +151,10 @@ export function Sidebar({ className }: SidebarProps) {
     <div className="relative pl-6 pr-2 py-1 text-sm font-semibold text-foreground">
       {/* Vertical Line */}
       <div
-        className={clsx(
-          "absolute left-2 w-px bg-gray-300",
-          isLast ? "h-2.5 top-0" : "h-full top-0"
-        )}
+       
       />
       {/* Horizontal Line */}
-      <div className="absolute left-2 top-2.5 h-px w-4 bg-gray-300" />
+      {/* <div className="absolute left-2 top-2.5 h-px w-4 bg-gray-300" /> */}
 
       {/* Label + Badge */}
       <div className="flex justify-between items-center ml-2">
@@ -160,11 +165,7 @@ export function Sidebar({ className }: SidebarProps) {
         ) : (
           <span>{name}</span>
         )}
-        {badge && (
-          <span className="bg-green-800 text-white text-xs px-1.5 py-0.5 rounded-full">
-            {badge}
-          </span>
-        )}
+       
       </div>
     </div>
   );
@@ -241,6 +242,8 @@ export function Sidebar({ className }: SidebarProps) {
         { label: "Agents", link: "/flow/settings/teams" },
         // { label: "Teams", link: "/flow/settings/agents" },
         { label: "Knowledge Base", link: "/flow/settings/knowledge",  badge: "new"  },
+        { label: "Departments", link: "/flow/department",  badge: "new"  },
+        { label: "Vector Database", link: "/flow/vector-database",  badge: "new"  },
        
       ],
     },
@@ -289,7 +292,7 @@ export function Sidebar({ className }: SidebarProps) {
                     key={itemIndex}
                     name={item.label}
                     isLast={itemIndex === section.items.length - 1}
-                    badge={item.badge}
+                    badge={item.badge ? parseInt(item.badge) : undefined}
                     link={item.link}
                   />
                 ))}

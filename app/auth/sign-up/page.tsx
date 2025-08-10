@@ -6,9 +6,11 @@ import { Input } from '@/components/ui/input'
 import { Eye, EyeOff, X , MessageCircle} from 'lucide-react'
 import Link from 'next/link'
 import axios from 'axios';
-import router from 'next/router'
+import { useRouter } from 'next/navigation'
+
 
 export default function SignUpPage() {
+  const router = useRouter()
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [activeTab, setActiveTab] = useState<'login' | 'signup'>('signup')
@@ -19,6 +21,9 @@ export default function SignUpPage() {
     confirmPassword: ''
   })
   const [error, setError] = useState('')
+  const ownerData = sessionStorage.getItem('ownerData')
+
+
 
   function isStrongPassword(password: string) {
     // At least 8 chars, 1 uppercase, 1 lowercase, 1 number, 1 special char
@@ -47,9 +52,9 @@ export default function SignUpPage() {
     handleSignUp({
       email: formData.email,
       name: formData.fullName,
-      tenant_id: 0,
-      role_id: 0,
-      department_id: 0,
+      tenant_id: sessionStorage.getItem('tenantID'),
+      role_id: sessionStorage.getItem('roleID'),
+      department_id: sessionStorage.getItem('departmentID'),
       password: formData.password,
     })
   }
@@ -57,19 +62,27 @@ export default function SignUpPage() {
   const handleSignUp = async (formData: any) => {
     try {
       const response = await axios.post(
-        `${process.env.NEXT_API_BASE_URL}/user/signup`,
+        `${process.env.NEXT_PUBLIC_API_BASE_URL}/user/signup`,
+       
         {
           email: formData.email,
-          name: formData.name,
-          tenant_id: formData.tenant_id,
-          role_id: formData.role_id,
-          department_id: formData.department_id,
           password: formData.password,
+          name: formData.name,
+          tenant_secret_code: sessionStorage.getItem('tenantSecret'),
+          role_id: sessionStorage.getItem('roleID'),
+          department_id: sessionStorage.getItem('departmentID')
         }
       );
       // alert('Account created successfully!');
       // Redirect or further actions here
+      sessionStorage.setItem('userSignUpData', JSON.stringify(response.data))
       router.push('/auth/sign-in')
+      // sessionStorage.removeItem('ownerData')
+      // sessionStorage.removeItem('roleID')
+      // sessionStorage.removeItem('departmentID')
+      // sessionStorage.removeItem('tenantID')  
+
+
     } catch (error: any) {
       alert('Sign up failed: ' + (error.response?.data?.message || error.message));
     }

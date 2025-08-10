@@ -17,14 +17,50 @@ export default function SignInPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     try {
-      const response = await axios.post(`${process.env.NEXT_API_BASE_URL}/user/login`, {
-        username: email,
+      const response = await axios.post(`${process.env.NEXT_PUBLIC_API_BASE_URL}/user/login`, {
+        email: email,
         password: password,
+        tenant_secret_code: sessionStorage.getItem('tenantSecret')
       })
-      alert('Login successful!')
+      // alert('Login successful!')
+      sessionStorage.setItem('userLoginData', JSON.stringify(response.data))
+      sessionStorage.setItem('userID', JSON.stringify(response.data.user.id))
+      
+      // Fetch user permissions
+      try {
+        const userID = sessionStorage.getItem('userID')
+        const permissionsResponse = await axios.get(
+          `${process.env.NEXT_PUBLIC_API_BASE_URL}/permission/user/${userID}/permissions`
+        )
+        
+        const permissionsData = permissionsResponse.data
+        
+        // Store user permissions
+        sessionStorage.setItem('userPermissions', JSON.stringify(permissionsData.permissions || null))
+        
+        // Store admin permissions (from user_role if present)
+        const adminPermissions = permissionsData.user_role?.permissions || null
+        sessionStorage.setItem('adminPermissions', JSON.stringify(adminPermissions))
+        
+        // Store user role data
+        sessionStorage.setItem('userRole', JSON.stringify(permissionsData.user_role || null))
+        
+        console.log('Permissions fetched and stored successfully')
+      } catch (permissionError: any) {
+        console.error('Failed to fetch permissions:', permissionError)
+        // Store null values if permissions fetch fails
+        sessionStorage.setItem('userPermissions', JSON.stringify(null))
+        sessionStorage.setItem('adminPermissions', JSON.stringify(null))
+        sessionStorage.setItem('userRole', JSON.stringify(null))
+      }
+      
+      
       // You can handle storing tokens or redirecting here
     } catch (error: any) {
       alert('Login failed: ' + (error.response?.data?.message || error.message))
+
+    } finally {
+      // router.push('/flow/chats')
     }
   }
 
