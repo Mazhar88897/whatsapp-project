@@ -9,31 +9,16 @@ import { toast } from "sonner"
 const mockChats = [
   {
     id: 1,
-    name: "FORTIS EASY PANELS",
+    name: "System",
     avatar: "F",
-    status: "CTWA",
+    status: "Un Active",
     messages: [
-      { id: 1, text: "Hello there!", time: "12:23 PM", fromMe: false },
-      { id: 2, text: "Hi! How can I help you today?", time: "12:24 PM", fromMe: true },
-      { id: 3, text: "I'd like to book an appointment please.", time: "12:28 PM", fromMe: false },
-      { id: 4, text: "Sure, when would you like to come in?", time: "12:33 PM", fromMe: true },
-      { id: 5, text: "Would you like to book an appointment?", time: "12:38 PM", fromMe: true },
+      { id: 1, text: "No messages yet", time: "12:23 PM", fromMe: false },
+      
     ],
   },
 
-  {
-    id: 2,
-    name: "XYZ AGENTS",
-    avatar: "F",
-    status: "CTWA",
-    messages: [
-      { id: 1, text: "Hello there!", time: "12:23 PM", fromMe: false },
-      { id: 2, text: "Hi! How can I help you today?", time: "12:24 PM", fromMe: true },
-      { id: 3, text: "I'd like to book an appointment please.", time: "12:28 PM", fromMe: false },
-      { id: 4, text: "Sure, when would you like to come in?", time: "12:33 PM", fromMe: true },
-      { id: 5, text: "Would you like to book an appointment?", time: "12:38 PM", fromMe: true },
-    ],
-  },
+ 
   // Add more chats if needed
 ]
 
@@ -531,9 +516,9 @@ export default function ChatsPage() {
       const tenantId = parseSessionNumber('tenantID')
       const departmentId = parseSessionNumber('departmentID')
       const userId = parseSessionNumber('userID')
-      if (!tenantId || !departmentId || !userId) {
-        throw new Error('Missing tenant/department/user identifiers in session')
-      }
+      // if (!tenantId || !departmentId || !userId) {
+      //   throw new Error('Missing tenant/department/user identifiers in session')
+      // }
 
       // Optimistic update with dedupe key
       const tempId = `temp-${Date.now()}`

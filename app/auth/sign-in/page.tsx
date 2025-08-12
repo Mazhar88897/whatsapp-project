@@ -7,24 +7,45 @@ import { Eye, EyeOff, X, MessageCircle } from 'lucide-react'
 import Link from 'next/link'
 import axios from 'axios'
 import { useRouter } from 'next/navigation'
+import { toast } from 'sonner'
 
 export default function SignInPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [activeTab, setActiveTab] = useState<'login' | 'signup'>('login')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [tenantSecretCode, setTenantSecretCode] = useState('')
   const router = useRouter();
+  const [showTenantSecretCode, setShowTenantSecretCode] = useState(false)
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     try {
       const response = await axios.post(`${process.env.NEXT_PUBLIC_API_BASE_URL}/user/login`, {
         email: email,
         password: password,
-        tenant_secret_code: sessionStorage.getItem('tenantSecret')
+        tenant_secret_code: tenantSecretCode
       })
       // alert('Login successful!')
+      
+      // Store complete user login data
       sessionStorage.setItem('userLoginData', JSON.stringify(response.data))
-      sessionStorage.setItem('userID', JSON.stringify(response.data.user.id))
+      
+      // Store individual important fields for easy access
+      sessionStorage.setItem('accessToken', response.data.access_token)
+      sessionStorage.setItem('tokenType', response.data.token_type)
+      sessionStorage.setItem('userID', response.data.user.id)
+      sessionStorage.setItem('userEmail', response.data.user.email)
+      sessionStorage.setItem('userName', response.data.user.name)
+      sessionStorage.setItem('userRole', response.data.user.role_name)
+      sessionStorage.setItem('userRoleId', response.data.user.role_id)
+      sessionStorage.setItem('tenantId', response.data.user.tenant_id)
+      sessionStorage.setItem('departmentId', response.data.user.department_id)
+      sessionStorage.setItem('isActive', response.data.user.is_active)
+      sessionStorage.setItem('isVerified', response.data.user.is_verified)
+      sessionStorage.setItem('createdAt', response.data.user.created_at)
+      sessionStorage.setItem('tenantMappings', JSON.stringify(response.data.tenant_mappings))
+      sessionStorage.setItem('customPermissions', JSON.stringify(response.data.user.custom_permissions))
+      sessionStorage.setItem('userSettings', JSON.stringify(response.data.user.settings))
       
       // Fetch user permissions
       try {
@@ -53,11 +74,13 @@ export default function SignInPage() {
         sessionStorage.setItem('adminPermissions', JSON.stringify(null))
         sessionStorage.setItem('userRole', JSON.stringify(null))
       }
-      
+      if(response.status === 200 ){
+        router.push('/setup')
+      }
       
       // You can handle storing tokens or redirecting here
     } catch (error: any) {
-      alert('Login failed: ' + (error.response?.data?.message || error.message))
+      toast.error('Login failed with wrong email, password or tenant secret code')
 
     } finally {
       // router.push('/flow/chats')
@@ -124,6 +147,32 @@ export default function SignInPage() {
               />
             </div>
 
+            <div>
+              <label htmlFor="Tenant Secret Code" className="block text-sm font-medium text-gray-700 mb-2">
+                  Tenant Secret Code
+              </label>
+              <Input
+                id="Tenant Secret Code"
+                type={showTenantSecretCode ? 'text' : 'password'}
+                placeholder="Tenant Secret Code"
+                value={tenantSecretCode}
+                onChange={(e) => setTenantSecretCode(e.target.value)}
+                className="w-full"
+                required
+              />
+              <div className="relative">
+              
+                {/* <button
+                  type="button"
+                  onClick={() => setShowTenantSecretCode(!showTenantSecretCode)}
+                  className="absolute right-3 top-[-1] transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                >
+                  {showTenantSecretCode ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button> */}
+                </div>
+              </div>
+
+
             {/* Password Field */}
             <div>
               <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
@@ -147,6 +196,7 @@ export default function SignInPage() {
                   {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
+              
             </div>
 
             {/* Login Button */}
@@ -159,14 +209,7 @@ export default function SignInPage() {
             </Button>
 
             {/* Forgot Password Link */}
-            <div className="text-center">
-              <Link
-                href="/auth/forgot-password"
-                className="text-blue-600 hover:text-blue-700 text-sm font-medium transition-colors"
-              >
-                Forgot your password?
-              </Link>
-            </div>
+           
           </form>
         </div>
       </div>

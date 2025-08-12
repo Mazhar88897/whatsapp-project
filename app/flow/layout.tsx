@@ -244,6 +244,7 @@ export function Sidebar({ className }: SidebarProps) {
         { label: "Knowledge Base", link: "/flow/settings/knowledge",  badge: "new"  },
         { label: "Departments", link: "/flow/department",  badge: "new"  },
         { label: "Vector Database", link: "/flow/vector-database",  badge: "new"  },
+        { label: "Configuration", link: "/flow/configuration",  badge: "new"  },
        
       ],
     },

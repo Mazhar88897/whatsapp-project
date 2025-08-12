@@ -8,6 +8,14 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { toast } from "sonner"
+import { Trash, Edit }  from "lucide-react"
+import LLMConfigModal from "./components/LLMConfigModal"
+import EmbeddingConfigModal from "./components/EmbeddingConfigModal"
 
 type AiModel = {
   id: number
@@ -28,6 +36,23 @@ export default function AllSettingsPage() {
   const [loading, setLoading] = useState<boolean>(false)
   const [error, setError] = useState<string | null>(null)
   const [requestUrl, setRequestUrl] = useState<string>("")
+  const [isModelModalOpen, setIsModelModalOpen] = useState(false)
+  const [modelFormData, setModelFormData] = useState({
+    name: '',
+    provider_name: '',
+    model_type: ''
+  })
+  const [isApiKeyModalOpen, setIsApiKeyModalOpen] = useState(false)
+  const [apiKeyFormData, setApiKeyFormData] = useState({
+    api_key: ''
+  })
+  const [isLLMConfigModalOpen, setIsLLMConfigModalOpen] = useState(false)
+  const [isEmbeddingConfigModalOpen, setIsEmbeddingConfigModalOpen] = useState(false)
+  const [selectedModel, setSelectedModel] = useState<AiModel | null>(null)
+
+
+
+  const [embeddingObject, setEmbeddingObject] = useState<any>(null)
 
   const baseUrlFromEnv = process.env.NEXT_PUBLIC_API_BASE_URL
 
@@ -36,7 +61,7 @@ export default function AllSettingsPage() {
     if (baseUrlFromEnv) {
       // Common patterns in the existing app
       urls.push(`${baseUrlFromEnv}/ai-config/providers`)
-      urls.push(`${baseUrlFromEnv}/api/ai-config/providers`)
+      urls.push(`${baseUrlFromEnv}/ai-config/providers`)
     }
     // Allow hardcoded external URL as an ultimate fallback (useful in dev/demo)
     urls.push("https://277bff154236.ngrok-free.app/api/ai-config/providers")
@@ -60,6 +85,9 @@ export default function AllSettingsPage() {
             setRequestUrl(url)
             return
           }
+          if (response.status === 200) {
+            toast.success('Providers fetched successfully')
+          }
         } catch (err: any) {
           // Try next candidate URL
           // Optionally log for debugging
@@ -70,12 +98,217 @@ export default function AllSettingsPage() {
       setError("Unable to fetch AI providers. Check your API base URL or network.")
     } finally {
       setLoading(false)
+
     }
   }, [candidateUrls])
 
   useEffect(() => {
     fetchProviders()
   }, [fetchProviders])
+
+
+  useEffect(() => {
+    const fetchTenantApiKeys = async () => {
+      try {
+        // Get tenant ID from session storage
+        // const tenantID = sessionStorage.getItem('tenantID')
+        const tenantID = '28'
+        
+        if (!tenantID) {
+          console.log('No tenant ID found in session')
+          return
+        }
+
+        const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/ai-config/api-keys/${tenantID}`, {
+          method: 'GET',
+          headers: {
+            'accept': 'application/json',
+            'ngrok-skip-browser-warning': '69420'
+          },
+        })
+
+        if (response.ok) {
+          const data = await response.json()
+          console.log('Tenant API keys fetched successfully:', data)
+          
+          // Store the first API key ID in session storage
+          if (data && data.length > 0) {
+            const apiKeyId = data[0].id
+            sessionStorage.setItem('api_key_id', apiKeyId.toString())
+            console.log('Stored API key ID:', apiKeyId)
+          }
+        } else {
+          console.error('Failed to fetch tenant API keys:', response.status)
+        }
+      } catch (error) {
+        console.error('Error fetching tenant API keys:', error)
+      }
+    }
+
+    fetchTenantApiKeys()
+  }, [])
+
+  const handleModelSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setLoading(true)
+    try {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/ai-config/models`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(modelFormData)
+      })
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`)
+      }
+      
+      const data = await response.json()
+      console.log('Model created successfully:', data)
+      toast.success('AI Model created successfully!')
+      setIsModelModalOpen(false)
+      setModelFormData({ name: '', provider_name: '', model_type: '' })
+      // Refresh the providers list after creating a model
+      fetchProviders()
+    } catch (error: any) {
+      console.error('Failed to create model:', error)
+      toast.error('Failed to create AI model')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleModelInputChange = (field: string, value: string) => {
+    setModelFormData(prev => ({
+      ...prev,
+      [field]: value
+    }))
+  }
+
+  const handleApiKeySubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setLoading(true)
+    try {
+      const tenantID = '28' // Using hardcoded value as per your changes
+      
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/ai-config/api-keys`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'ngrok-skip-browser-warning': '69420'
+        },
+        body: JSON.stringify({
+          model_id: 6, // You can make this dynamic if needed
+          api_key: apiKeyFormData.api_key,
+          tenant_id: 28
+        })
+      })
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`)
+      }
+
+      const data = await response.json()
+      console.log('API key created successfully:', data)
+      toast.success('API Key created successfully!')
+      setIsApiKeyModalOpen(false)
+      setApiKeyFormData({ api_key: '' })
+      
+      // Refresh the API keys list
+      // fetchTenantApiKeys()
+    } catch (error: any) {
+      console.error('Failed to create API key:', error)
+      toast.error('Failed to create API key')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleApiKeyInputChange = (value: string) => {
+    setApiKeyFormData({ api_key: value })
+  }
+
+  const openModelConfigModal = (model: AiModel) => {
+    setSelectedModel(model)
+    if (model.model_type.toLowerCase() === 'llm') {
+      setIsLLMConfigModalOpen(true)
+    } else if (model.model_type.toLowerCase() === 'embedding') {
+      setIsEmbeddingConfigModalOpen(true)
+    }
+  }
+
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false)
+  const [modelToDelete, setModelToDelete] = useState<AiModel | null>(null)
+
+  const handleDeleteApiKey = async () => {
+    if (!modelToDelete) return
+    
+    setLoading(true)
+    try {
+      const tenantID = '28'
+      
+      // First, get the existing API key ID for this model
+      const existingApiKeysResponse = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/ai-config/api-keys/${tenantID}`, {
+        method: 'GET',
+        headers: {
+          'accept': 'application/json',
+          'ngrok-skip-browser-warning': '69420'
+        },
+      })
+
+      if (existingApiKeysResponse.ok) {
+        const existingApiKeys = await existingApiKeysResponse.json()
+        const existingApiKey = existingApiKeys.find((key: any) => key.model_id === modelToDelete.id)
+        
+        if (existingApiKey) {
+          // Delete the API key
+          const deleteResponse = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/ai-config/api-keys/${existingApiKey.id}`, {
+            method: 'DELETE',
+            headers: {
+              'ngrok-skip-browser-warning': '69420'
+            },
+          })
+
+          if (deleteResponse.ok) {
+            console.log('API Key deleted successfully')
+            toast.success('API Key deleted successfully!')
+            setIsDeleteModalOpen(false)
+            setModelToDelete(null)
+            // Refresh the providers list
+            fetchProviders()
+          } else {
+            // Parse the error response to get the detail
+            const errorData = await deleteResponse.json()
+            if (errorData.detail) {
+              toast.error(errorData.detail)
+            } else {
+              toast.error(`API Key deletion failed: ${deleteResponse.status}`)
+            }
+          }
+        } else {
+          throw new Error('API Key not found for this model')
+        }
+      } else {
+        throw new Error('Failed to fetch existing API keys')
+      }
+    } catch (error: any) {
+      console.error('Failed to delete API key:', error)
+      toast.error(`Failed to delete API key: ${error.message}`)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const openDeleteModal = (model: AiModel) => {
+    setModelToDelete(model)
+    setIsDeleteModalOpen(true)
+  }
+
+  const handleConfigSuccess = () => {
+    fetchProviders()
+    setSelectedModel(null)
+  }
 
   const normalizedType = (t?: string) => String(t || "").trim().toLowerCase()
 
@@ -109,7 +342,7 @@ export default function AllSettingsPage() {
             <div className="grid gap-3">
               {(provider.models || []).map((model) => (
                 <div key={model.id} className="flex flex-col rounded-md border p-3 sm:flex-row sm:items-center sm:justify-between gap-2">
-                  <div className="min-w-0">
+                  <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       <span className="font-medium break-all">{model.name}</span>
                       <Badge variant="secondary" className="capitalize">{model.model_type}</Badge>
@@ -125,6 +358,20 @@ export default function AllSettingsPage() {
                   <div className="text-xs text-muted-foreground sm:text-right">
                     {model.provider_name}
                   </div>
+                  <div className="flex items-center gap-2">
+                    <div 
+                      className="p-2 hover:bg-gray-100 rounded cursor-pointer transition-colors"
+                      onClick={() => openModelConfigModal(model)}
+                    >
+                      <Edit className="h-4 w-4" />   
+                    </div>
+                    <div 
+                      className="p-2 hover:bg-gray-100 rounded cursor-pointer transition-colors"
+                      onClick={() => openDeleteModal(model)}
+                    >
+                      <Trash className="h-4 w-4" />
+                    </div>
+                  </div>
                 </div>
               ))}
             </div>
@@ -136,6 +383,11 @@ export default function AllSettingsPage() {
 
   return (
     <div className="flex flex-col gap-6 p-6 sm:p-10">
+    
+      
+      
+      
+      
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold">AI Configuration</h1>
@@ -145,7 +397,14 @@ export default function AllSettingsPage() {
           <Button onClick={fetchProviders} variant="default" size="sm" disabled={loading}>
             {loading ? "Loading…" : "Refresh"}
           </Button>
+          <Button variant="default" size="sm" onClick={() => setIsModelModalOpen(true)}>
+           {loading ? "Loading…" : "Add Model"}
+          </Button>
+          <Button variant="default" size="sm" onClick={() => setIsApiKeyModalOpen(true)}>
+            {loading ? "Loading…" : "Add API Key"}
+          </Button>
         </div>
+        
       </div>
 
       <Card>
@@ -170,6 +429,132 @@ export default function AllSettingsPage() {
           </Tabs>
         </CardContent>
       </Card>
+
+      {/* AI Model Creation Modal */}
+      <Dialog open={isModelModalOpen} onOpenChange={setIsModelModalOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Create AI Model</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleModelSubmit} className="space-y-4">
+            <div>
+              <Label htmlFor="modelName">Model Name</Label>
+              <Input
+                id="modelName"
+                value={modelFormData.name}
+                onChange={(e) => handleModelInputChange('name', e.target.value)}
+                placeholder="Enter model name"
+                required
+              />
+            </div>
+            <div>
+            <Label htmlFor="providerName">Provider Name</Label>
+              <Select value={modelFormData.provider_name} onValueChange={(value) => handleModelInputChange('provider_name', value)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select provider" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="OpenAI">OpenAI</SelectItem>
+                  <SelectItem value="Google">Google</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label htmlFor="modelType">Model Type</Label>
+              <Select value={modelFormData.model_type} onValueChange={(value) => handleModelInputChange('model_type', value)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select model type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="llm">LLM</SelectItem>
+                  <SelectItem value="embedding">Embedding</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex justify-end space-x-2">
+              <Button type="button" variant="outline" onClick={() => setIsModelModalOpen(false)}>
+                Cancel
+              </Button>
+              <Button type="submit">
+                Create Model
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* API Key Creation Modal */}
+      <Dialog open={isApiKeyModalOpen} onOpenChange={setIsApiKeyModalOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Create API Key</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleApiKeySubmit} className="space-y-4">
+            <div>
+              <Label htmlFor="apiKey">API Key</Label>
+              <Input
+                id="apiKey"
+                value={apiKeyFormData.api_key}
+                onChange={(e) => handleApiKeyInputChange(e.target.value)}
+                placeholder="Enter API key"
+                required
+              />
+            </div>
+            <div className="flex justify-end space-x-2">
+              <Button type="button" variant="outline" onClick={() => setIsApiKeyModalOpen(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={loading}>
+                {loading ? "Creating..." : "Create API Key"}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Modal */}
+      <Dialog open={isDeleteModalOpen} onOpenChange={setIsDeleteModalOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Delete API Key</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Are you sure you want to delete the API key for <strong>{modelToDelete?.name}</strong>? 
+              This action cannot be undone.
+            </p>
+            <div className="flex justify-end space-x-2">
+              <Button type="button" variant="outline" onClick={() => setIsDeleteModalOpen(false)}>
+                Cancel
+              </Button>
+              <Button 
+                type="button" 
+                variant="destructive" 
+                onClick={handleDeleteApiKey}
+                disabled={loading}
+              >
+                {loading ? "Deleting..." : "Delete API Key"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* LLM Configuration Modal */}
+      <LLMConfigModal
+        isOpen={isLLMConfigModalOpen}
+        onClose={() => setIsLLMConfigModalOpen(false)}
+        model={selectedModel}
+        onSuccess={handleConfigSuccess}
+      />
+
+      {/* Embedding Configuration Modal */}
+      <EmbeddingConfigModal
+        isOpen={isEmbeddingConfigModalOpen}
+        onClose={() => setIsEmbeddingConfigModalOpen(false)}
+        model={selectedModel}
+        onSuccess={handleConfigSuccess}
+      />
     </div>
   )
 }
