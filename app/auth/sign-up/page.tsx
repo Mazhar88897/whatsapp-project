@@ -3,9 +3,8 @@
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { OtpInput } from '@/components/ui/otp-input'
 import { TenantSecretModal } from '@/components/ui/tenant-secret-modal'
-import { Eye, EyeOff, MessageCircle, RefreshCw } from 'lucide-react'
+import { Eye, EyeOff, MessageCircle } from 'lucide-react'
 import Link from 'next/link'
 import axios from 'axios'
 import { useRouter } from 'next/navigation'
@@ -18,17 +17,9 @@ export default function SignUpPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
-  const [tenantSecretCode, setTenantSecretCode] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
   const router = useRouter()
-
-  // OTP states
-  const [showOtpForm, setShowOtpForm] = useState(false)
-  const [otp, setOtp] = useState('')
-  const [isOtpLoading, setIsOtpLoading] = useState(false)
-  const [otpSent, setOtpSent] = useState(false)
-  const [countdown, setCountdown] = useState(0)
 
   // Tenant modal states
   const [showTenantModal, setShowTenantModal] = useState(false)
@@ -76,63 +67,8 @@ export default function SignUpPage() {
     setConfirmPassword(e.target.value)
   }
 
-  //   const handleSubmit = async (e: React.FormEvent) => {
-  //     e.preventDefault()
-  //     setIsLoading(true)
-  //     setError('')
-      
-  //     try {
-  //       const response = await axios.post(`${process.env.NEXT_PUBLIC_API_BASE_URL}/user/login`, {
-  //         email: email,
-  //         password: password,
-  //         tenant_secret_code: tenantSecretCode
-  //       })
-
-  //       // Store user data in session storage
-  //       sessionStorage.setItem('userLoginData', JSON.stringify(response.data))
-  //       sessionStorage.setItem('userID', JSON.stringify(response.data.user.id))
-        
-  //       // Fetch user permissions
-  //       try {
-  //         const userID = sessionStorage.getItem('userID')
-  //         const permissionsResponse = await axios.get(
-  //           `${process.env.NEXT_PUBLIC_API_BASE_URL}/permission/user/${userID}/permissions`
-  //         )
-        
-  //         const permissionsData = permissionsResponse.data
-        
-  //         // Store user permissions
-  //         sessionStorage.setItem('userPermissions', JSON.stringify(permissionsData.permissions || null))
-        
-  //         // Store admin permissions (from user_role if present)
-  //         const adminPermissions = permissionsData.user_role?.permissions || null
-  //         sessionStorage.setItem('adminPermissions', JSON.stringify(adminPermissions))
-        
-  //         // Store user role data
-  //         sessionStorage.setItem('userRole', JSON.stringify(permissionsData.user_role || null))
-        
-  //         console.log('Permissions fetched and stored successfully')
-  //       } catch (permissionError: any) {
-  //         console.error('Failed to fetch permissions:', permissionError)
-  //         // Store null values if permissions fetch fails
-  //         sessionStorage.setItem('userPermissions', JSON.stringify(null))
-  //         sessionStorage.setItem('adminPermissions', JSON.stringify(null))
-  //         sessionStorage.setItem('userRole', JSON.stringify(null))
-  //       }
-
-  //       if (response.status === 200) {
-  //         router.push('/flow/chats')
-  //       }
-        
-  //     } catch (error: any) {
-  //       setError(error.response?.data?.message || error.message || 'Login failed. Please try again.')
-  //     } finally {
-  //       setIsLoading(false)
-  //     }
-  //   }
-
-  // New OTP-based authentication flow
-  const handleSendOtp = async (e: React.FormEvent) => {
+  // Handle form submission to create tenant
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     
     // Validate all required fields
@@ -165,175 +101,55 @@ export default function SignUpPage() {
       toast.error('Password does not meet strength requirements')
       return
     }
-    
-    if (!tenantSecretCode) {
-      toast.error('Please enter your tenant secret code')
-      return
-    }
 
-    setIsOtpLoading(true)
+    setIsLoading(true)
     try {
-      const response = await axios.post(`${process.env.NEXT_PUBLIC_API_BASE_URL}/auth/send-otp`, {
-        email: email
-      })
-      
-      toast.success('OTP sent successfully! Check your email')
-      
-      // After successful OTP send, create tenant
-      try {
-        const tenantResponse = await axios.post(`${process.env.NEXT_PUBLIC_API_BASE_URL}/api/tenant/`, {
-          name: fullName,
-          email: email,
-          max_team_member_allowed: 5,
-          max_conversations_allowed: 30,
-          max_outgoing_messages_per_day: 800
-        })
-        
-        // Store tenant data in session storage
-        if (tenantResponse.data && tenantResponse.data.id) {
-          sessionStorage.setItem('tenantID', tenantResponse.data.id)
-          sessionStorage.setItem('tenantData', JSON.stringify(tenantResponse.data))
-          
-          // Store tenant secret code for the user
-          sessionStorage.setItem('tenantSecret', tenantResponse.data.tenant_secret_code)
-          
-          // Show tenant modal with secret code
-          setTenantData(tenantResponse.data)
-          setShowTenantModal(true)
-          
-          toast.success('Tenant created successfully!')
-        }
-        
-      } catch (tenantError: any) {
-        console.error('Failed to create tenant:', tenantError)
-        // Don't show error to user as OTP was sent successfully
-        // Tenant creation failure won't block the sign-up process
-      }
-      
-      setShowOtpForm(true)
-      setOtpSent(true)
-      startCountdown()
-    } catch (error: any) {
-      toast.error(error.response?.data?.message || 'Failed to send OTP')
-    } finally {
-      setIsOtpLoading(false)
-    }
-  }
-
-  const handleVerifyOtp = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!otp || otp.length !== 6) {
-      toast.error('Please enter a valid 6-digit OTP')
-      return
-    }
-
-    setIsOtpLoading(true)
-    try {
-      const response = await axios.post(`${process.env.NEXT_PUBLIC_API_BASE_URL}/auth/verify-otp`, {
+      // Create tenant
+      const tenantResponse = await axios.post(`${process.env.NEXT_PUBLIC_API_BASE_URL}/tenant/`, {
+        name: fullName,
         email: email,
-        otp: otp
+        max_team_member_allowed: 5,
+        max_conversations_allowed: 30,
+        max_outgoing_messages_per_day: 800
       })
       
-      toast.success('OTP verified successfully!')
-      
-      // Now proceed with the actual sign-up
-      try {
-        const signupResponse = await axios.post(`${process.env.NEXT_PUBLIC_API_BASE_URL}/user/signup`, {
-          email: email,
-          password: password,
-          name: fullName,
-          tenant_secret_code: tenantSecretCode,
-          role_id: sessionStorage.getItem('roleID'),
-          department_id: sessionStorage.getItem('departmentID')
-        })
-
-        toast.success('Account created successfully!')
+      // Store tenant data in session storage
+      if (tenantResponse.data && tenantResponse.data.id) {
+        sessionStorage.setItem('tenantID', tenantResponse.data.id)
+        sessionStorage.setItem('tenantData', JSON.stringify(tenantResponse.data))
+        sessionStorage.setItem('tenantSecret', tenantResponse.data.tenant_secret_code)
         
-        // Don't redirect immediately - let the modal handle it
-        // The modal will redirect to login after user copies the secret and closes it
-        
-      } catch (signupError: any) {
-        toast.error('Sign up failed after OTP verification: ' + (signupError.response?.data?.message || signupError.message))
-        // Reset OTP form to allow retry
-        setOtp('')
-      }
-      
-    } catch (error: any) {
-      toast.error(error.response?.data?.message || 'Invalid OTP')
-      setOtp('')
-    } finally {
-      setIsOtpLoading(false)
-    }
-  }
-
-  const handleResendOtp = async () => {
-    if (countdown > 0) return
-    
-    setIsOtpLoading(true)
-    try {
-      const response = await axios.post(`${process.env.NEXT_PUBLIC_API_BASE_URL}/auth/resend-otp`, {
-        email: email
-      })
-      
-      toast.success('OTP resent successfully!')
-      
-      // After successful resend, create tenant
-      try {
-        const tenantResponse = await axios.post(`${process.env.NEXT_PUBLIC_API_BASE_URL}/api/tenant/`, {
-          name: fullName,
-          email: email,
-          max_team_member_allowed: 5,
-          max_conversations_allowed: 30,
-          max_outgoing_messages_per_day: 800
-        })
-        
-        // Store tenant data in session storage
-        if (tenantResponse.data && tenantResponse.data.id) {
-          sessionStorage.setItem('tenantID', tenantResponse.data.id)
-          sessionStorage.setItem('tenantData', JSON.stringify(tenantResponse.data))
+        // Now create user with the tenant secret code
+        try {
+          const userSignupResponse = await axios.post(`${process.env.NEXT_PUBLIC_API_BASE_URL}/user/signup`, {
+            email: email,
+            password: password,
+            name: fullName,
+            tenant_secret_code: tenantResponse.data.tenant_secret_code,
+            role_id: 0, // Default role ID
+            department_id: 0 // Default department ID
+          })
           
-          // Store tenant secret code for the user
-          sessionStorage.setItem('tenantSecret', tenantResponse.data.tenant_secret_code)
+          toast.success('Account created successfully!')
           
           // Show tenant modal with secret code
           setTenantData(tenantResponse.data)
           setShowTenantModal(true)
           
-          toast.success('Tenant created successfully!')
+        } catch (userError: any) {
+          toast.error('User creation failed: ' + (userError.response?.data?.message || userError.message))
+          // Still show the tenant modal even if user creation fails
+          setTenantData(tenantResponse.data)
+          setShowTenantModal(true)
         }
         
-      } catch (tenantError: any) {
-        console.error('Failed to create tenant:', tenantError)
-        // Don't show error to user as OTP was sent successfully
-        // Tenant creation failure won't block the sign-up process
       }
       
-      startCountdown()
     } catch (error: any) {
-      toast.error(error.response?.data?.message || 'Failed to resend OTP')
+      toast.error(error.response?.data?.message || 'Failed to create tenant')
     } finally {
-      setIsOtpLoading(false)
+      setIsLoading(false)
     }
-  }
-
-  const startCountdown = () => {
-    setCountdown(60)
-    const timer = setInterval(() => {
-      setCountdown((prev) => {
-        if (prev <= 1) {
-          clearInterval(timer)
-          return 0
-        }
-        return prev - 1
-      })
-    }, 1000)
-  }
-
-  const handleBackToLogin = () => {
-    setShowOtpForm(false)
-    setOtp('')
-    setOtpSent(false)
-    setCountdown(0)
   }
 
   const handleTenantModalClose = () => {
@@ -344,11 +160,8 @@ export default function SignUpPage() {
     setEmail('')
     setPassword('')
     setConfirmPassword('')
-    setTenantSecretCode('')
-    setShowOtpForm(false)
-    setOtp('')
-    setOtpSent(false)
-    setCountdown(0)
+    // Redirect to sign-in page
+    router.push('/auth/sign-in')
   }
 
   return (
@@ -363,7 +176,7 @@ export default function SignUpPage() {
             </div>
             <h1 className="text-2xl font-bold text-gray-900">Welcome to WhatsaApp CRM</h1>
             <p className="text-gray-600 text-sm mt-2">
-              {showOtpForm ? 'Enter OTP to continue' : 'Sign in to your account'}
+              Create your account
             </p>
           </div>
 
@@ -390,197 +203,122 @@ export default function SignUpPage() {
             </div>
           )}
 
-          {/* OTP Form */}
-          {showOtpForm ? (
-            <form onSubmit={handleVerifyOtp} className="space-y-4">
-              <div className="text-center mb-4">
-                <p className="text-sm text-gray-600">
-                  We've sent a 6-digit OTP to <span className="font-medium text-gray-900">{email}</span>
-                </p>
-              </div>
+          {/* Sign Up Form */}
+          <form onSubmit={handleSubmit} className="space-y-4">
+            {/* Full Name Field */}
+            <div>
+              <label htmlFor="fullName" className="block text-sm font-medium text-gray-700 mb-2">
+                Tenant Name
+              </label>
+              <Input
+                id="fullName"
+                type="text"
+                placeholder="John Doe"
+                value={fullName}
+                onChange={(e) => setFullName(e.target.value)}
+                className="w-full"
+                required
+                disabled={isLoading}
+              />
+            </div>
 
-              {/* OTP Input */}
-              <div>
-                <label htmlFor="otp" className="block text-sm font-medium text-gray-700 mb-2">
-                  Enter OTP
-                </label>
-                <OtpInput
-                  value={otp}
-                  onChange={setOtp}
-                  length={6}
-                  disabled={isOtpLoading}
-                  className="mb-4"
+            {/* Email Field */}
+            <div>
+              <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
+                Email
+              </label>
+              <Input
+                id="email"
+                type="email"
+                placeholder="you@example.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="w-full"
+                required
+                disabled={isLoading}
+              />
+            </div>
+
+            {/* Password Field */}
+            <div>
+              <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
+                Password
+              </label>
+              <div className="relative">
+                <Input
+                  id="password"
+                  type={showPassword ? 'text' : 'password'}
+                  placeholder="Enter your password"
+                  value={password}
+                  onChange={handlePasswordChange}
+                  className="w-full pr-10"
+                  required
+                  disabled={isLoading}
                 />
-                <p className="text-xs text-gray-500 text-center">
-                  Enter the 6-digit code sent to your email
-                </p>
-              </div>
-
-              {/* Verify OTP Button */}
-              <Button
-                type="submit"
-                className="w-full bg-gradient-to-r from-blue-500 to-green-500 hover:from-blue-600 hover:to-green-600 text-white font-medium py-3 rounded-md transition-all duration-200 transform hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
-                disabled={isOtpLoading}
-              >
-                {isOtpLoading ? 'Verifying...' : 'Verify OTP'}
-              </Button>
-
-              {/* Resend OTP */}
-              <div className="text-center">
                 <button
                   type="button"
-                  onClick={handleResendOtp}
-                  disabled={countdown > 0 || isOtpLoading}
-                  className="text-blue-600 hover:text-blue-700 text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 mx-auto"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 disabled:opacity-50"
+                  disabled={isLoading}
                 >
-                  <RefreshCw className={`w-4 h-4 ${isOtpLoading ? 'animate-spin' : ''}`} />
-                  {countdown > 0 ? `Resend in ${countdown}s` : 'Resend OTP'}
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
-                {countdown > 0 && (
-                  <div className="mt-2 text-xs text-gray-500">
-                    You can request a new code in {countdown} seconds
-                  </div>
-                )}
               </div>
+            </div>
 
-              {/* Back to Login */}
-              <div className="text-center">
+            {/* Confirm Password Field */}
+            <div>
+              <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-2">
+                Confirm Password
+              </label>
+              <div className="relative">
+                <Input
+                  id="confirmPassword"
+                  type={showConfirmPassword ? 'text' : 'password'}
+                  placeholder="Confirm your password"
+                  value={confirmPassword}
+                  onChange={handleConfirmPasswordChange}
+                  className="w-full pr-10"
+                  required
+                  disabled={isLoading}
+                />
                 <button
                   type="button"
-                  onClick={handleBackToLogin}
-                  className="text-gray-600 hover:text-gray-700 text-sm font-medium transition-colors"
+                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 disabled:opacity-50"
+                  disabled={isLoading}
                 >
-                  ← Back to Login
+                  {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
-            </form>
-          ) : (
-            /* Regular Sign Up Form */
-            <form onSubmit={handleSendOtp} className="space-y-4">
-              {/* Full Name Field */}
-              <div>
-                <label htmlFor="fullName" className="block text-sm font-medium text-gray-700 mb-2">
-                  Full Name
-                </label>
-                <Input
-                  id="fullName"
-                  type="text"
-                  placeholder="John Doe"
-                  value={fullName}
-                  onChange={(e) => setFullName(e.target.value)}
-                  className="w-full"
-                  required
-                  disabled={isOtpLoading}
-                />
-              </div>
+              <p className="text-xs text-gray-500 mt-1">
+                Passwords must match.
+              </p>
+              <p className="text-xs text-gray-500 mt-1">
+                Password must be at least 8 characters long, contain uppercase, lowercase, number, and special character.
+              </p>
+            </div>
 
-              {/* Email Field */}
-              <div>
-                <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
-                  Email
-                </label>
-                <Input
-                  id="email"
-                  type="email"
-                  placeholder="you@example.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="w-full"
-                  required
-                  disabled={isOtpLoading}
-                />
-              </div>
+            {/* Create Account Button */}
+            <Button
+              type="submit"
+              className="w-full bg-gradient-to-r from-blue-500 to-green-500 hover:from-blue-600 hover:to-green-600 text-white font-medium py-3 rounded-md transition-all duration-200 transform hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
+              disabled={isLoading}
+            >
+              {isLoading ? 'Creating Account...' : 'Create Account'}
+            </Button>
 
-              {/* Password Field */}
-              <div>
-                <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
-                  Password
-                </label>
-                <div className="relative">
-                  <Input
-                    id="password"
-                    type={showPassword ? 'text' : 'password'}
-                    placeholder="Enter your password"
-                    value={password}
-                    onChange={handlePasswordChange}
-                    className="w-full pr-10"
-                    required
-                    disabled={isOtpLoading}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 disabled:opacity-50"
-                    disabled={isOtpLoading}
-                  >
-                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
-                </div>
-              
-              </div>
-
-              {/* Confirm Password Field */}
-              <div>
-                <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-2">
-                  Confirm Password
-                </label>
-                <div className="relative">
-                  <Input
-                    id="confirmPassword"
-                    type={showConfirmPassword ? 'text' : 'password'}
-                    placeholder="Confirm your password"
-                    value={confirmPassword}
-                    onChange={handleConfirmPasswordChange}
-                    className="w-full pr-10"
-                    required
-                    disabled={isOtpLoading}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 disabled:opacity-50"
-                    disabled={isOtpLoading}
-                  >
-                    {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
-                </div>
-                <p className="text-xs text-gray-500 mt-1">
-                  Passwords must match.
-                    <p className="text-xs text-gray-500 mt-1">
-                  Password must be at least 8 characters long, contain uppercase, lowercase, number, and special character.
-                </p>
-          
-                </p>
-               
-              </div>
-
-              {/* Tenant Secret Code Field */}
-           
-
-              {/* Send OTP Button */}
-              <Button
-                type="submit"
-                className="w-full bg-gradient-to-r from-blue-500 to-green-500 hover:from-blue-600 hover:to-green-600 text-white font-medium py-3 rounded-md transition-all duration-200 transform hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
-                disabled={isOtpLoading}
+            {/* Sign Up Link */}
+            <div className="text-center text-sm text-gray-600">
+              Already have an account?{' '}
+              <Link
+                href="/auth/sign-in"
+                className="text-blue-600 hover:text-blue-700 font-medium transition-colors"
               >
-                {isOtpLoading ? 'Sending OTP...' : 'Send OTP'}
-              </Button>
-
-              {/* Forgot Password Link */}
-             
-
-              {/* Sign Up Link */}
-              <div className="text-center text-sm text-gray-600">
-                Already have an account?{' '}
-                <Link
-                  href="/auth/sign-in"
-                  className="text-blue-600 hover:text-blue-700 font-medium transition-colors"
-                >
-                  Login Here
-                </Link>
-              </div>
-            </form>
-          )}
+                Login Here
+              </Link>
+            </div>
+          </form>
         </div>
       </div>
       

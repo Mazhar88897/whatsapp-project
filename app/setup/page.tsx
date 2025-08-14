@@ -140,15 +140,18 @@ export default function SetupPage() {
         }
         await axios.put(`${process.env.NEXT_PUBLIC_API_BASE_URL}/platform-config`, updatePayload)
         toast.success('Platform configuration updated successfully')
-        router.push('/flow/all-settings')
+        // Redirect to login screen instead of all-settings
+        router.push('/login')
       } else {
-            await axios.post(`${process.env.NEXT_PUBLIC_API_BASE_URL}/platform-config`, payload)
+        await axios.post(`${process.env.NEXT_PUBLIC_API_BASE_URL}/platform-config`, payload)
         toast.success('Platform configuration created successfully')
-        router.push('/flow/all-settings')
+        // Redirect to login screen instead of all-settings
+        router.push('/login')
       }
       reset()
       setEditingConfig(null)
-      fetchConfigs()
+      // Comment out fetchConfigs() since we're redirecting anyway
+      // fetchConfigs()
      
     } catch (error) {
       console.error('Error saving config:', error)
